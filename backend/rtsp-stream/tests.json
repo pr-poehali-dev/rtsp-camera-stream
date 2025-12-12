@@ -1,0 +1,53 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS - CORS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "GET - List all streams (empty)",
+      "method": "GET",
+      "path": "/?action=list",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "streams": []
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "POST - Start RTSP stream with missing parameters",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "camera_id": "test-cam-001"
+      },
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "GET - Get status for non-existent camera",
+      "method": "GET",
+      "path": "/?camera_id=non-existent&action=status",
+      "expectedStatus": 404,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "DELETE - Stop non-existent stream",
+      "method": "DELETE",
+      "path": "/?camera_id=non-existent",
+      "expectedStatus": 404,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}
