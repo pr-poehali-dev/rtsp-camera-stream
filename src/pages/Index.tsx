@@ -2,7 +2,11 @@ import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { Button } from '@/components/ui/button';
 import Icon from '@/components/ui/icon';
+import { useToast } from '@/hooks/use-toast';
+
+const API_URL = 'https://functions.poehali.dev/db16596d-b0a9-4f08-a8c0-e08458dd8760';
 
 interface CameraService {
   id: string;
@@ -11,6 +15,10 @@ interface CameraService {
   throughput: number;
   latency: number;
   events: number;
+  rtspUrl?: string;
+  fps?: number;
+  bufferSize?: number;
+  currentFrame?: string;
 }
 
 interface SystemMetric {
@@ -22,41 +30,171 @@ interface SystemMetric {
 }
 
 const Index = () => {
+  const { toast } = useToast();
   const [cameras, setCameras] = useState<CameraService[]>([
-    { id: 'cam-001', name: 'Camera Service 01', status: 'active', throughput: 1250, latency: 12, events: 45230 },
-    { id: 'cam-002', name: 'Camera Service 02', status: 'active', throughput: 980, latency: 18, events: 38442 },
-    { id: 'cam-003', name: 'Camera Service 03', status: 'error', throughput: 0, latency: 0, events: 12053 },
-    { id: 'cam-004', name: 'Camera Service 04', status: 'active', throughput: 1430, latency: 9, events: 52341 },
-    { id: 'cam-005', name: 'Camera Service 05', status: 'inactive', throughput: 450, latency: 35, events: 18920 },
-    { id: 'cam-006', name: 'Camera Service 06', status: 'active', throughput: 1120, latency: 14, events: 41235 },
+    { id: 'cam-001', name: 'Camera Service 01', status: 'inactive', throughput: 0, latency: 0, events: 0, rtspUrl: 'rtsp://example.com/cam1', fps: 25 },
+    { id: 'cam-002', name: 'Camera Service 02', status: 'inactive', throughput: 0, latency: 0, events: 0, rtspUrl: 'rtsp://example.com/cam2', fps: 25 },
+    { id: 'cam-003', name: 'Camera Service 03', status: 'inactive', throughput: 0, latency: 0, events: 0, rtspUrl: 'rtsp://example.com/cam3', fps: 25 },
+    { id: 'cam-004', name: 'Camera Service 04', status: 'inactive', throughput: 0, latency: 0, events: 0, rtspUrl: 'rtsp://example.com/cam4', fps: 25 },
+    { id: 'cam-005', name: 'Camera Service 05', status: 'inactive', throughput: 0, latency: 0, events: 0, rtspUrl: 'rtsp://example.com/cam5', fps: 25 },
+    { id: 'cam-006', name: 'Camera Service 06', status: 'inactive', throughput: 0, latency: 0, events: 0, rtspUrl: 'rtsp://example.com/cam6', fps: 25 },
   ]);
 
-  const [systemMetrics] = useState<SystemMetric[]>([
-    { name: 'Total Throughput', value: 5230, unit: 'msg/s', status: 'success', icon: 'Activity' },
-    { name: 'Avg Latency', value: 15, unit: 'ms', status: 'success', icon: 'Clock' },
-    { name: 'Kafka Lag', value: 234, unit: 'messages', status: 'warning', icon: 'Database' },
-    { name: 'API Gateway', value: 99.8, unit: '% uptime', status: 'success', icon: 'Server' },
+  const [systemMetrics, setSystemMetrics] = useState<SystemMetric[]>([
+    { name: 'Active Streams', value: 0, unit: 'cameras', status: 'success', icon: 'Video' },
+    { name: 'Total Frames', value: 0, unit: 'frames', status: 'success', icon: 'Activity' },
+    { name: 'Avg Buffer', value: 0, unit: 'frames', status: 'success', icon: 'Database' },
+    { name: 'System Status', value: 100, unit: '% uptime', status: 'success', icon: 'Server' },
   ]);
 
-  const [kafkaEvents, setKafkaEvents] = useState<number[]>([120, 145, 180, 165, 190, 220, 195, 210, 240, 230]);
+  const [kafkaEvents, setKafkaEvents] = useState<number[]>([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+
+  const fetchStreamsList = async () => {
+    try {
+      const response = await fetch(`${API_URL}?action=list`);
+      const data = await response.json();
+      
+      setCameras(prev => prev.map(cam => {
+        const stream = data.streams.find((s: any) => s.camera_id === cam.id);
+        if (stream) {
+          return {
+            ...cam,
+            status: 'active' as const,
+            bufferSize: stream.buffer_size,
+            fps: stream.fps,
+            throughput: stream.buffer_size || 0,
+          };
+        }
+        return cam;
+      }));
+
+      setSystemMetrics(prev => {
+        const newMetrics = [...prev];
+        newMetrics[0].value = data.streams.length;
+        const totalFrames = data.streams.reduce((acc: number, s: any) => acc + (s.buffer_size || 0), 0);
+        newMetrics[1].value = totalFrames;
+        newMetrics[2].value = data.streams.length > 0 ? Math.round(totalFrames / data.streams.length) : 0;
+        return newMetrics;
+      });
+    } catch (error) {
+      console.error('Failed to fetch streams list:', error);
+    }
+  };
+
+  const startStream = async (cameraId: string, rtspUrl: string, fps: number) => {
+    try {
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          camera_id: cameraId,
+          rtsp_url: rtspUrl,
+          fps: fps,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast({
+          title: 'Stream started',
+          description: `Camera ${cameraId} is now streaming`,
+        });
+        await fetchStreamsList();
+      } else {
+        toast({
+          title: 'Failed to start stream',
+          description: data.error || 'Unknown error',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Connection error',
+        description: 'Failed to connect to streaming service',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const stopStream = async (cameraId: string) => {
+    try {
+      const response = await fetch(`${API_URL}?camera_id=${cameraId}`, {
+        method: 'DELETE',
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast({
+          title: 'Stream stopped',
+          description: `Camera ${cameraId} stream stopped`,
+        });
+        setCameras(prev => prev.map(cam => 
+          cam.id === cameraId 
+            ? { ...cam, status: 'inactive', throughput: 0, bufferSize: 0, currentFrame: undefined }
+            : cam
+        ));
+        await fetchStreamsList();
+      } else {
+        toast({
+          title: 'Failed to stop stream',
+          description: data.error || 'Unknown error',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Connection error',
+        description: 'Failed to connect to streaming service',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const fetchFrame = async (cameraId: string) => {
+    try {
+      const response = await fetch(`${API_URL}?camera_id=${cameraId}&action=stream`);
+      const data = await response.json();
+
+      if (response.ok && data.frame) {
+        setCameras(prev => prev.map(cam => 
+          cam.id === cameraId 
+            ? { ...cam, currentFrame: data.frame, events: data.frame_number }
+            : cam
+        ));
+      }
+    } catch (error) {
+      console.error('Failed to fetch frame:', error);
+    }
+  };
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setCameras(prev => prev.map(cam => ({
-        ...cam,
-        throughput: cam.status === 'active' ? Math.floor(Math.random() * 500) + 900 : cam.throughput,
-        latency: cam.status === 'active' ? Math.floor(Math.random() * 15) + 8 : cam.latency,
-        events: cam.status === 'active' ? cam.events + Math.floor(Math.random() * 50) : cam.events,
-      })));
+    fetchStreamsList();
+    const listInterval = setInterval(fetchStreamsList, 5000);
+    return () => clearInterval(listInterval);
+  }, []);
 
-      setKafkaEvents(prev => {
-        const newEvents = [...prev.slice(1), Math.floor(Math.random() * 100) + 180];
-        return newEvents;
+  useEffect(() => {
+    const frameInterval = setInterval(() => {
+      cameras.forEach(cam => {
+        if (cam.status === 'active') {
+          fetchFrame(cam.id);
+        }
       });
+    }, 1000);
+
+    return () => clearInterval(frameInterval);
+  }, [cameras]);
+
+  useEffect(() => {
+    const chartInterval = setInterval(() => {
+      const activeCount = cameras.filter(c => c.status === 'active').length;
+      setKafkaEvents(prev => [...prev.slice(1), activeCount * 25]);
     }, 2000);
 
-    return () => clearInterval(interval);
-  }, []);
+    return () => clearInterval(chartInterval);
+  }, [cameras]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -86,9 +224,9 @@ const Index = () => {
           <div>
             <h1 className="text-3xl font-bold flex items-center gap-3">
               <Icon name="Video" className="text-primary" size={32} />
-              Stream Monitoring Platform
+              RTSP Stream Monitor
             </h1>
-            <p className="text-muted-foreground mt-2">Kubernetes Cluster • Kafka • API Gateway</p>
+            <p className="text-muted-foreground mt-2">Real-time Video Streaming Platform</p>
           </div>
           <Badge variant="outline" className="text-green-400 border-green-400 px-4 py-2">
             <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse-glow mr-2"></span>
@@ -117,7 +255,7 @@ const Index = () => {
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-semibold flex items-center gap-2">
               <Icon name="BarChart3" className="text-primary" size={24} />
-              Kafka Event Stream
+              Frame Rate Monitor
             </h2>
             <Badge variant="outline" className="text-primary border-primary">Real-time</Badge>
           </div>
@@ -126,7 +264,7 @@ const Index = () => {
               <div key={idx} className="flex-1 flex flex-col items-center gap-2">
                 <div 
                   className="w-full bg-primary/20 rounded-t transition-all duration-500"
-                  style={{ height: `${(value / 300) * 100}%` }}
+                  style={{ height: `${Math.min((value / 150) * 100, 100)}%` }}
                 >
                   <div className="w-full h-full bg-gradient-to-t from-primary to-primary/40 rounded-t"></div>
                 </div>
@@ -140,7 +278,7 @@ const Index = () => {
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold flex items-center gap-2">
               <Icon name="Layers" className="text-primary" size={24} />
-              Camera Services
+              Camera Streams
             </h2>
             <div className="text-sm text-muted-foreground">
               {activeCameras} / {totalCameras} active
@@ -167,102 +305,80 @@ const Index = () => {
                     </Badge>
                   </div>
 
+                  {camera.currentFrame && camera.status === 'active' && (
+                    <div className="w-full aspect-video bg-black rounded-lg overflow-hidden">
+                      <img 
+                        src={`data:image/jpeg;base64,${camera.currentFrame}`}
+                        alt={`${camera.name} live feed`}
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                  )}
+
+                  {!camera.currentFrame && camera.status === 'active' && (
+                    <div className="w-full aspect-video bg-black/50 rounded-lg flex items-center justify-center">
+                      <Icon name="Loader2" className="text-primary animate-spin" size={32} />
+                    </div>
+                  )}
+
+                  {camera.status === 'inactive' && (
+                    <div className="w-full aspect-video bg-black/20 rounded-lg flex items-center justify-center">
+                      <Icon name="VideoOff" className="text-muted-foreground" size={32} />
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-3 gap-3 text-center">
                     <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground">Throughput</p>
-                      <p className="text-lg font-bold text-primary">{camera.throughput}</p>
-                      <p className="text-xs text-muted-foreground">msg/s</p>
+                      <p className="text-xs text-muted-foreground">FPS</p>
+                      <p className="text-lg font-bold text-primary">{camera.fps || 0}</p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground">Latency</p>
-                      <p className="text-lg font-bold text-yellow-400">{camera.latency}</p>
-                      <p className="text-xs text-muted-foreground">ms</p>
+                      <p className="text-xs text-muted-foreground">Buffer</p>
+                      <p className="text-lg font-bold text-yellow-400">{camera.bufferSize || 0}</p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground">Events</p>
-                      <p className="text-lg font-bold text-foreground">{camera.events.toLocaleString()}</p>
-                      <p className="text-xs text-muted-foreground">total</p>
+                      <p className="text-xs text-muted-foreground">Frame #</p>
+                      <p className="text-lg font-bold text-foreground">{camera.events || 0}</p>
                     </div>
                   </div>
 
                   {camera.status === 'active' && (
                     <div className="space-y-2">
-                      <div className="flex justify-between text-xs">
-                        <span className="text-muted-foreground">Health</span>
-                        <span className="text-green-400">98%</span>
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>Buffer Usage</span>
+                        <span>{camera.bufferSize || 0}/1500</span>
                       </div>
-                      <Progress value={98} className="h-1" />
+                      <Progress value={((camera.bufferSize || 0) / 1500) * 100} className="h-2" />
                     </div>
                   )}
+
+                  <div className="flex gap-2">
+                    {camera.status === 'inactive' && (
+                      <Button
+                        onClick={() => startStream(camera.id, camera.rtspUrl!, camera.fps!)}
+                        className="flex-1"
+                        size="sm"
+                      >
+                        <Icon name="Play" size={16} className="mr-2" />
+                        Start Stream
+                      </Button>
+                    )}
+                    {camera.status === 'active' && (
+                      <Button
+                        onClick={() => stopStream(camera.id)}
+                        variant="destructive"
+                        className="flex-1"
+                        size="sm"
+                      >
+                        <Icon name="Square" size={16} className="mr-2" />
+                        Stop Stream
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </Card>
             ))}
           </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card className="p-5 bg-card border-border">
-            <div className="flex items-center gap-3 mb-4">
-              <Icon name="CloudCog" className="text-primary" size={20} />
-              <h3 className="font-semibold">Kubernetes</h3>
-            </div>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">Pods Running</span>
-                <span className="font-bold text-green-400">24/24</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">CPU Usage</span>
-                <span className="font-bold">42%</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">Memory</span>
-                <span className="font-bold">8.2 / 16 GB</span>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="p-5 bg-card border-border">
-            <div className="flex items-center gap-3 mb-4">
-              <Icon name="Workflow" className="text-primary" size={20} />
-              <h3 className="font-semibold">Nginx Load Balancer</h3>
-            </div>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">Requests/s</span>
-                <span className="font-bold text-primary">1,834</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">Connections</span>
-                <span className="font-bold">234</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">Uptime</span>
-                <span className="font-bold text-green-400">99.9%</span>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="p-5 bg-card border-border">
-            <div className="flex items-center gap-3 mb-4">
-              <Icon name="Shield" className="text-primary" size={20} />
-              <h3 className="font-semibold">Authentication</h3>
-            </div>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">Auth Method</span>
-                <Badge variant="outline" className="text-xs">Basic Auth</Badge>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">Active Sessions</span>
-                <span className="font-bold">12</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">Failed Attempts</span>
-                <span className="font-bold text-red-400">3</span>
-              </div>
-            </div>
-          </Card>
         </div>
       </div>
     </div>
