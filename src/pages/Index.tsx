@@ -348,13 +348,13 @@ const Index = () => {
                   </div>
 
                   {camera.status === 'active' && (
-                    <div className="w-full aspect-video bg-black/80 rounded-lg flex flex-col items-center justify-center gap-4 p-4">
-                      <Icon name="Wifi" className="text-green-400" size={48} />
-                      <div className="text-center">
-                        <p className="text-sm text-green-400 font-semibold">Streaming Active</p>
-                        <p className="text-xs text-muted-foreground mt-1">{camera.rtspUrl}</p>
-                        <p className="text-xs text-muted-foreground mt-2">RTSP streams require external player or browser plugin</p>
-                      </div>
+                    <div className="w-full aspect-video bg-black rounded-lg overflow-hidden relative">
+                      <iframe
+                        src={`https://rtsp.me/embed/${encodeURIComponent(camera.rtspUrl || '')}/`}
+                        className="w-full h-full border-0"
+                        allowFullScreen
+                        title={`${camera.name} live stream`}
+                      />
                     </div>
                   )}
 
