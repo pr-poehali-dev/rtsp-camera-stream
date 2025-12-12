@@ -348,13 +348,25 @@ const Index = () => {
                   </div>
 
                   {camera.status === 'active' && (
-                    <div className="w-full aspect-video bg-black rounded-lg overflow-hidden relative">
-                      <iframe
-                        src={`https://rtsp.me/embed/${encodeURIComponent(camera.rtspUrl || '')}/`}
-                        className="w-full h-full border-0"
-                        allowFullScreen
-                        title={`${camera.name} live stream`}
-                      />
+                    <div className="w-full aspect-video bg-black rounded-lg overflow-hidden relative group">
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10">
+                        <Icon name="Video" className="text-green-400 animate-pulse" size={48} />
+                        <div className="text-center px-4">
+                          <p className="text-sm text-green-400 font-semibold mb-2">🟢 Stream Active</p>
+                          <p className="text-xs text-muted-foreground break-all">{camera.rtspUrl}</p>
+                          <p className="text-xs text-yellow-400 mt-3">📹 {camera.fps} FPS • Buffer: {camera.bufferSize || 0} frames</p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          className="mt-2"
+                          onClick={() => window.open(`https://rtsp.me/embed/${encodeURIComponent(camera.rtspUrl || '')}/`, '_blank')}
+                        >
+                          <Icon name="ExternalLink" size={14} className="mr-2" />
+                          Open in Player
+                        </Button>
+                      </div>
+                      <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-purple-500/10"></div>
                     </div>
                   )}
 
