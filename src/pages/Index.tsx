@@ -3,6 +3,9 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import Icon from '@/components/ui/icon';
 import { useToast } from '@/hooks/use-toast';
 
@@ -39,6 +42,10 @@ const Index = () => {
     { id: 'cam-005', name: 'Camera Service 05', status: 'inactive', throughput: 0, latency: 0, events: 0, rtspUrl: 'rtsp://example.com/cam5', fps: 25 },
     { id: 'cam-006', name: 'Camera Service 06', status: 'inactive', throughput: 0, latency: 0, events: 0, rtspUrl: 'rtsp://example.com/cam6', fps: 25 },
   ]);
+
+  const [editingCamera, setEditingCamera] = useState<CameraService | null>(null);
+  const [editForm, setEditForm] = useState({ name: '', rtspUrl: '', fps: 25 });
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   const [systemMetrics, setSystemMetrics] = useState<SystemMetric[]>([
     { name: 'Active Streams', value: 0, unit: 'cameras', status: 'success', icon: 'Video' },
@@ -166,6 +173,31 @@ const Index = () => {
       }
     } catch (error) {
       console.error('Failed to fetch frame:', error);
+    }
+  };
+
+  const openEditDialog = (camera: CameraService) => {
+    setEditingCamera(camera);
+    setEditForm({
+      name: camera.name,
+      rtspUrl: camera.rtspUrl || '',
+      fps: camera.fps || 25,
+    });
+    setDialogOpen(true);
+  };
+
+  const saveSettings = () => {
+    if (editingCamera) {
+      setCameras(prev => prev.map(cam => 
+        cam.id === editingCamera.id
+          ? { ...cam, name: editForm.name, rtspUrl: editForm.rtspUrl, fps: editForm.fps }
+          : cam
+      ));
+      toast({
+        title: 'Settings saved',
+        description: `Camera ${editingCamera.id} settings updated`,
+      });
+      setDialogOpen(false);
     }
   };
 
@@ -297,12 +329,22 @@ const Index = () => {
                       </div>
                       <p className="text-xs text-muted-foreground">{camera.id}</p>
                     </div>
-                    <Badge 
-                      variant={camera.status === 'active' ? 'default' : 'secondary'}
-                      className={camera.status === 'active' ? 'bg-green-500/20 text-green-400 border-green-500/30' : ''}
-                    >
-                      {camera.status}
-                    </Badge>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={() => openEditDialog(camera)}
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                      >
+                        <Icon name="Settings" size={16} />
+                      </Button>
+                      <Badge 
+                        variant={camera.status === 'active' ? 'default' : 'secondary'}
+                        className={camera.status === 'active' ? 'bg-green-500/20 text-green-400 border-green-500/30' : ''}
+                      >
+                        {camera.status}
+                      </Badge>
+                    </div>
                   </div>
 
                   {camera.currentFrame && camera.status === 'active' && (
@@ -381,6 +423,57 @@ const Index = () => {
           </div>
         </div>
       </div>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Camera Settings</DialogTitle>
+            <DialogDescription>
+              Configure camera name, RTSP URL and frame rate
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="camera-name">Camera Name</Label>
+              <Input
+                id="camera-name"
+                value={editForm.name}
+                onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="Camera Service 01"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="rtsp-url">RTSP URL</Label>
+              <Input
+                id="rtsp-url"
+                value={editForm.rtspUrl}
+                onChange={(e) => setEditForm(prev => ({ ...prev, rtspUrl: e.target.value }))}
+                placeholder="rtsp://example.com/stream"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="fps">Frame Rate (FPS)</Label>
+              <Input
+                id="fps"
+                type="number"
+                min={1}
+                max={60}
+                value={editForm.fps}
+                onChange={(e) => setEditForm(prev => ({ ...prev, fps: parseInt(e.target.value) || 25 }))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={saveSettings}>
+              <Icon name="Save" size={16} className="mr-2" />
+              Save Settings
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
