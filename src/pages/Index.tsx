@@ -67,18 +67,18 @@ const Index = () => {
           return {
             ...cam,
             status: 'active' as const,
-            bufferSize: stream.buffer_size,
+            bufferSize: stream.buffer_frames,
             fps: stream.fps,
-            throughput: stream.buffer_size || 0,
+            throughput: stream.buffer_frames || 0,
           };
         }
-        return cam;
+        return { ...cam, status: 'inactive' as const, bufferSize: 0 };
       }));
 
       setSystemMetrics(prev => {
         const newMetrics = [...prev];
         newMetrics[0].value = data.streams.length;
-        const totalFrames = data.streams.reduce((acc: number, s: any) => acc + (s.buffer_size || 0), 0);
+        const totalFrames = data.streams.reduce((acc: number, s: any) => acc + (s.buffer_frames || 0), 0);
         newMetrics[1].value = totalFrames;
         newMetrics[2].value = data.streams.length > 0 ? Math.round(totalFrames / data.streams.length) : 0;
         return newMetrics;
@@ -164,10 +164,10 @@ const Index = () => {
       const response = await fetch(`${API_URL}?camera_id=${cameraId}&action=stream`);
       const data = await response.json();
 
-      if (response.ok && data.frame) {
+      if (response.ok && data.frame_data) {
         setCameras(prev => prev.map(cam => 
           cam.id === cameraId 
-            ? { ...cam, currentFrame: data.frame, events: data.frame_number }
+            ? { ...cam, currentFrame: data.frame_data, events: data.metadata?.frame_number || 0 }
             : cam
         ));
       }
@@ -347,13 +347,14 @@ const Index = () => {
                     </div>
                   </div>
 
-                  {camera.currentFrame && camera.status === 'active' && (
-                    <div className="w-full aspect-video bg-black rounded-lg overflow-hidden">
-                      <img 
-                        src={`data:image/jpeg;base64,${camera.currentFrame}`}
-                        alt={`${camera.name} live feed`}
-                        className="w-full h-full object-contain"
-                      />
+                  {camera.status === 'active' && (
+                    <div className="w-full aspect-video bg-black/80 rounded-lg flex flex-col items-center justify-center gap-4 p-4">
+                      <Icon name="Wifi" className="text-green-400" size={48} />
+                      <div className="text-center">
+                        <p className="text-sm text-green-400 font-semibold">Streaming Active</p>
+                        <p className="text-xs text-muted-foreground mt-1">{camera.rtspUrl}</p>
+                        <p className="text-xs text-muted-foreground mt-2">RTSP streams require external player or browser plugin</p>
+                      </div>
                     </div>
                   )}
 
