@@ -55,33 +55,20 @@ const RTSPPlayer = ({ cameraId, apiUrl, fps = 25, bufferSize = 0, isActive }: RT
             const canvas = canvasRef.current;
             const ctx = canvas.getContext('2d');
             if (ctx) {
-              ctx.fillStyle = '#0a0a0a';
-              ctx.fillRect(0, 0, canvas.width, canvas.height);
-              
-              const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-              gradient.addColorStop(0, '#1e293b');
-              gradient.addColorStop(0.5, '#334155');
-              gradient.addColorStop(1, '#1e293b');
-              ctx.fillStyle = gradient;
-              ctx.fillRect(0, 0, canvas.width, canvas.height);
-              
-              ctx.fillStyle = '#22c55e';
-              ctx.font = 'bold 24px monospace';
-              ctx.textAlign = 'center';
-              ctx.fillText('FRAME DATA RECEIVED', canvas.width / 2, canvas.height / 2 - 40);
-              
-              ctx.fillStyle = '#94a3b8';
-              ctx.font = '16px monospace';
-              ctx.fillText(`Frame #${frameNumber}`, canvas.width / 2, canvas.height / 2);
-              
-              const decoded = atob(data.frame_data);
-              ctx.fillStyle = '#60a5fa';
-              ctx.font = '14px monospace';
-              ctx.fillText(decoded.substring(0, 50), canvas.width / 2, canvas.height / 2 + 30);
-              
-              const size = Math.round(data.frame_data.length * 0.75 / 1024);
-              ctx.fillStyle = '#fbbf24';
-              ctx.fillText(`Size: ${size} KB`, canvas.width / 2, canvas.height / 2 + 60);
+              const img = new Image();
+              img.onload = () => {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+              };
+              img.onerror = () => {
+                ctx.fillStyle = '#1a1a1a';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#ef4444';
+                ctx.font = 'bold 16px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('Failed to decode JPEG frame', canvas.width / 2, canvas.height / 2);
+              };
+              img.src = `data:image/jpeg;base64,${data.frame_data}`;
             }
           }
         }

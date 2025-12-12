@@ -39,6 +39,51 @@ class VideoBuffer:
 
 active_streams: Dict[str, Dict[str, Any]] = {}
 
+def generate_jpeg_frame(frame_number: int, camera_id: str, rtsp_url: str, width: int = 640, height: int = 360) -> bytes:
+    """Генерирует реальное JPEG изображение с информацией о кадре"""
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+        import io
+        
+        img = Image.new('RGB', (width, height), color=(20, 30, 40))
+        draw = ImageDraw.Draw(img)
+        
+        draw.rectangle([0, 0, width, 30], fill=(34, 139, 34))
+        draw.rectangle([0, height-30, width, height], fill=(70, 130, 180))
+        
+        try:
+            font_large = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 32)
+            font_medium = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 16)
+            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 12)
+        except:
+            font_large = ImageFont.load_default()
+            font_medium = ImageFont.load_default()
+            font_small = ImageFont.load_default()
+        
+        draw.text((10, 5), f"🔴 LIVE - {camera_id}", fill=(255, 255, 255), font=font_medium)
+        
+        frame_text = f"Frame #{frame_number}"
+        draw.text((width//2 - 80, height//2 - 40), frame_text, fill=(100, 200, 255), font=font_large)
+        
+        time_text = time.strftime("%H:%M:%S", time.localtime())
+        draw.text((width//2 - 40, height//2 + 10), time_text, fill=(255, 255, 100), font=font_medium)
+        
+        url_parts = rtsp_url.split('/')
+        url_display = '/'.join(url_parts[:3]) + '/...' if len(url_parts) > 3 else rtsp_url
+        draw.text((10, height - 25), f"Source: {url_display}", fill=(255, 255, 255), font=font_small)
+        
+        for i in range(0, width, 40):
+            x = (i + frame_number * 2) % width
+            color_val = int(128 + 127 * ((i / width)))
+            draw.rectangle([x, 50, x+20, height-50], fill=(color_val, 50, 200-color_val))
+        
+        buffer = io.BytesIO()
+        img.save(buffer, format='JPEG', quality=85)
+        return buffer.getvalue()
+        
+    except ImportError:
+        return f"FRAME_{frame_number}_CAM_{camera_id}_NO_PIL_AVAILABLE".encode('utf-8')
+
 def simulate_rtsp_capture(camera_id: str, rtsp_url: str, buffer: VideoBuffer, fps: int = 25):
     frame_interval = 1.0 / fps
     frame_count = 0
@@ -48,16 +93,17 @@ def simulate_rtsp_capture(camera_id: str, rtsp_url: str, buffer: VideoBuffer, fp
         
         while active_streams[camera_id]['running']:
             try:
-                mock_frame_data = f"FRAME_{frame_count}_CAM_{camera_id}".encode('utf-8')
+                jpeg_data = generate_jpeg_frame(frame_count, camera_id, rtsp_url)
                 
                 metadata = {
                     'frame_number': frame_count,
                     'camera_id': camera_id,
                     'fps': fps,
-                    'source': rtsp_url
+                    'source': rtsp_url,
+                    'format': 'jpeg'
                 }
                 
-                buffer.add_frame(mock_frame_data, metadata)
+                buffer.add_frame(jpeg_data, metadata)
                 frame_count += 1
                 
                 time.sleep(frame_interval)
