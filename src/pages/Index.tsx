@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import Icon from '@/components/ui/icon';
 import { useToast } from '@/hooks/use-toast';
+import RTSPPlayer from '@/components/RTSPPlayer';
 
 const API_URL = 'https://functions.poehali.dev/db16596d-b0a9-4f08-a8c0-e08458dd8760';
 
@@ -159,22 +160,7 @@ const Index = () => {
     }
   };
 
-  const fetchFrame = async (cameraId: string) => {
-    try {
-      const response = await fetch(`${API_URL}?camera_id=${cameraId}&action=stream`);
-      const data = await response.json();
 
-      if (response.ok && data.frame_data) {
-        setCameras(prev => prev.map(cam => 
-          cam.id === cameraId 
-            ? { ...cam, currentFrame: data.frame_data, events: data.metadata?.frame_number || 0 }
-            : cam
-        ));
-      }
-    } catch (error) {
-      console.error('Failed to fetch frame:', error);
-    }
-  };
 
   const openEditDialog = (camera: CameraService) => {
     setEditingCamera(camera);
@@ -207,17 +193,7 @@ const Index = () => {
     return () => clearInterval(listInterval);
   }, []);
 
-  useEffect(() => {
-    const frameInterval = setInterval(() => {
-      cameras.forEach(cam => {
-        if (cam.status === 'active') {
-          fetchFrame(cam.id);
-        }
-      });
-    }, 1000);
 
-    return () => clearInterval(frameInterval);
-  }, [cameras]);
 
   useEffect(() => {
     const chartInterval = setInterval(() => {
@@ -347,60 +323,13 @@ const Index = () => {
                     </div>
                   </div>
 
-                  {camera.status === 'active' && (
-                    <div className="w-full aspect-video bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-lg overflow-hidden relative">
-                      <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center">
-                        <div className="space-y-4">
-                          <div className="relative">
-                            <Icon name="Video" className="text-green-400 animate-pulse" size={56} />
-                            <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full animate-ping"></div>
-                          </div>
-                          
-                          <div className="space-y-2">
-                            <Badge className="bg-green-500/90 text-white border-0 backdrop-blur-sm px-3 py-1">
-                              <span className="w-2 h-2 bg-white rounded-full animate-pulse mr-2"></span>
-                              STREAMING ACTIVE
-                            </Badge>
-                            
-                            <div className="space-y-1 text-sm">
-                              <p className="text-green-400 font-semibold">Backend capturing video</p>
-                              <p className="text-xs text-muted-foreground max-w-xs break-all">{camera.rtspUrl}</p>
-                            </div>
-                          </div>
-
-                          <div className="flex gap-3 justify-center text-xs">
-                            <div className="bg-black/40 rounded-lg px-3 py-2">
-                              <div className="text-yellow-400 font-semibold">{camera.fps} FPS</div>
-                              <div className="text-muted-foreground">Frame rate</div>
-                            </div>
-                            <div className="bg-black/40 rounded-lg px-3 py-2">
-                              <div className="text-blue-400 font-semibold">{camera.bufferSize || 0}</div>
-                              <div className="text-muted-foreground">Buffer frames</div>
-                            </div>
-                          </div>
-
-                          <div className="pt-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="text-xs"
-                              onClick={() => {
-                                const rtspMeUrl = `https://rtsp.me/embed/${encodeURIComponent(camera.rtspUrl || '')}/`;
-                                window.open(rtspMeUrl, '_blank', 'width=800,height=600');
-                              }}
-                            >
-                              <Icon name="ExternalLink" size={14} className="mr-2" />
-                              Open in External Player
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="absolute inset-0 opacity-20">
-                        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-purple-500/20 animate-pulse"></div>
-                      </div>
-                    </div>
-                  )}
+                  <RTSPPlayer
+                    cameraId={camera.id}
+                    apiUrl={API_URL}
+                    fps={camera.fps}
+                    bufferSize={camera.bufferSize}
+                    isActive={camera.status === 'active'}
+                  />
 
                   {camera.status === 'inactive' && (
                     <div className="w-full aspect-video bg-black/20 rounded-lg flex items-center justify-center">
